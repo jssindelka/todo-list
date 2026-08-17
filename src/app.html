@@ -1114,12 +1114,28 @@ $('#impFile').addEventListener('change', async e => {
   if(!file) return;
   try{
     const parsed = Store.migrate(JSON.parse(await file.text()));
-    if(!parsed.tasks.length && !confirm('That backup has no tasks. Import anyway?')) return;
-    const before = state;
-    state = parsed;
+    if(!parsed.tasks.length && !confirm('That file has no tasks. Import anyway?')) return;
+
+    /* Merge, never replace. This used to overwrite the whole list, which
+       quietly destroyed anything already on the device — the same reasoning
+       as the sync merge: newest edit per task wins, nothing is dropped. */
+    const before = JSON.parse(JSON.stringify(state));
+    const byId = new Map(state.tasks.map(t => [t.id, t]));
+    let added = 0, updated = 0;
+    parsed.tasks.forEach(t => {
+      const prev = byId.get(t.id);
+      if(!prev){ state.tasks.push(t); byId.set(t.id, t); added++; }
+      else if((t.updatedAt || 0) > (prev.updatedAt || 0)){ Object.assign(prev, t); updated++; }
+    });
+
     bumpOrder();
     applyTheme(); save(); render(); closeMenu(); Sync.schedule();
-    showToast(`${parsed.tasks.length} imported`, () => { state = before; applyTheme(); save(); render(); });
+    const msg = added || updated
+      ? `${added} added${updated ? `, ${updated} updated` : ''}`
+      : 'Already up to date';
+    showToast(msg, () => {
+      state = before; applyTheme(); save(); render(); Sync.schedule();
+    });
   }catch(err){
     console.warn(err);
     showToast("Couldn't read that file", null);

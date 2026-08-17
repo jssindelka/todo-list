@@ -91,7 +91,9 @@ same instant could interleave. Vanishingly unlikely for one person, and the next
 sync reconciles it. Fixing it properly means Durable Objects.
 
 `Export backup` / `Import backup` still work regardless, and are the answer if
-you ever want a copy that does not depend on any of this.
+you ever want a copy that does not depend on any of this. Import **merges** —
+it adds what is missing and updates what is older, never wiping what is already
+on the device. Importing the same file twice is a no-op.
 
 ---
 
