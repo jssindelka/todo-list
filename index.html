@@ -161,6 +161,49 @@ button,.chk,.disc,.chip,.seg button{touch-action:manipulation;}
 .list--dragging .item:not(.item--drag){pointer-events:none;}
 @media (hover:hover){ .row{cursor:grab;} .item--drag .row{cursor:grabbing;} }
 
+/* ── swipe to send to Today ─────────────────────────────────────── */
+.swipe{position:relative;overflow:hidden;}
+.swipe-actions{
+  position:absolute;inset:0 auto 0 0;width:88px;
+  display:flex;align-items:center;justify-content:center;
+}
+.today-btn{
+  width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
+  border:1px solid var(--line);color:var(--fg);
+  transition:background .2s var(--ease),color .2s var(--ease),border-color .2s;
+}
+.today-btn svg{width:15px;height:15px;stroke:currentColor;stroke-width:1.4;fill:none;}
+.today-btn:hover{background:var(--fg);color:var(--knock);border-color:var(--fg);}
+.item--today .today-btn{background:var(--fg);color:var(--knock);border-color:var(--fg);}
+
+/* the row itself slides, revealing the action beneath it */
+.swipe .row{
+  position:relative;background:var(--bg);
+  transition:transform .22s var(--ease);
+}
+.item--drag .swipe .row,.swiping .row{transition:none;}
+.item--open .swipe .row{background:var(--bg);}
+
+/* on desktop the same action is a hover-revealed button — a swipe is a
+   thumb gesture and has no good mouse equivalent */
+.row-today{
+  width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+  color:var(--fg-faint);opacity:0;transition:opacity .18s,color .2s;
+}
+.row-today svg{width:13px;height:13px;stroke:currentColor;stroke-width:1.5;fill:none;}
+@media (hover:hover){
+  .row:hover .row-today,.row-today:focus-visible{opacity:1;}
+  .row-today:hover{color:var(--fg);}
+  .item--today .row-today{opacity:1;color:var(--fg);}
+}
+@media (hover:none){ .row-today{display:none;} }
+
+/* a task already picked for today, seen from the Personal/Work backlog */
+.cat .dot{
+  display:inline-block;width:5px;height:5px;border-radius:50%;
+  background:var(--fg);margin-right:7px;vertical-align:middle;
+}
+
 /* one-time nudge, retired the first time a task is moved */
 .reorder-hint{
   flex:0 0 auto;font-size:9px;letter-spacing:.16em;text-transform:uppercase;
@@ -168,9 +211,10 @@ button,.chk,.disc,.chip,.seg button{touch-action:manipulation;}
 }
 
 .row{
-  display:grid;grid-template-columns:23px 1fr 16px;gap:15px;align-items:center;
+  display:grid;grid-template-columns:23px 1fr auto 16px;gap:15px;align-items:center;
   width:100%;text-align:left;
 }
+@media (hover:none){ .row{grid-template-columns:23px 1fr 16px;} }
 .chk{
   width:23px;height:23px;border-radius:50%;border:1px solid var(--fg-faint);
   display:grid;place-items:center;background:transparent;flex:0 0 23px;
@@ -433,7 +477,7 @@ button,.chk,.disc,.chip,.seg button{touch-action:manipulation;}
   <footer class="foot">
     <div class="bar">
       <div class="seg" role="tablist" aria-label="Filter tasks">
-        <button role="tab" data-filter="all"      aria-selected="true">All</button>
+        <button role="tab" data-filter="today"    aria-selected="true">Today</button>
         <button role="tab" data-filter="personal" aria-selected="false">Personal</button>
         <button role="tab" data-filter="work"     aria-selected="false">Work</button>
       </div>
@@ -528,7 +572,7 @@ const Store = (() => {
   const KEY = 'todo.v1';
   const EMPTY = () => ({
     version:2, tasks:[],
-    prefs:{ theme:'system', filter:'all', name:'', reordered:false },
+    prefs:{ theme:'system', filter:'today', name:'', reordered:false },
     // theme and filter stay device-local on purpose; only the list travels
     sync:{ key:'', enabled:false, lastSyncAt:0, orderUpdatedAt:0, nameUpdatedAt:0 }
   });
@@ -556,9 +600,12 @@ const Store = (() => {
     if(!d || typeof d !== 'object') return EMPTY();
     const base = EMPTY();
     const tasks = Array.isArray(d.tasks) ? d.tasks.filter(valid).map(normalise) : [];
+    const p = { ...base.prefs, ...(d.prefs||{}) };
+    // 'all' is gone; anything unrecognised lands on Today
+    if(!['today','personal','work'].includes(p.filter)) p.filter = 'today';
     return {
       version:2, tasks,
-      prefs:{ ...base.prefs, ...(d.prefs||{}) },
+      prefs:p,
       sync:{ ...base.sync, ...(d.sync||{}) }
     };
   }
@@ -570,6 +617,7 @@ const Store = (() => {
     category: t.category === 'work' ? 'work' : 'personal',
     notes: typeof t.notes === 'string' ? t.notes.slice(0,2000) : '',
     done: !!t.done,
+    today: !!t.today,
     createdAt: Number(t.createdAt) || Date.now(),
     completedAt: t.completedAt ? Number(t.completedAt) : null,
     // pre-sync data has no updatedAt; createdAt is the honest fallback
@@ -626,8 +674,36 @@ const live = () => state.tasks.filter(t => !t.deletedAt);
 
 function visible(){
   const f = state.prefs.filter;
-  const list = f === 'all' ? live() : live().filter(t => t.category === f);
+  const list = f === 'today'
+    ? live().filter(t => t.today)          // what you committed to
+    : live().filter(t => t.category === f); // the backlog it came from
   return list.filter(t => !t.done).concat(list.filter(t => t.done));
+}
+
+/* Unfinished work carries over on its own; a task only leaves Today once
+   the day you finished it has passed, so completing something late in the
+   evening still reads as done rather than vanishing under your thumb.
+   Deliberately invisible — no dates appear anywhere in the UI. */
+function rolloverToday(){
+  const midnight = new Date(); midnight.setHours(0,0,0,0);
+  const cutoff = midnight.getTime();
+  let changed = false;
+  state.tasks.forEach(t => {
+    if(t.today && t.done && (t.completedAt || 0) < cutoff){
+      t.today = false; t.updatedAt = Date.now(); changed = true;
+    }
+  });
+  if(changed) save();
+  return changed;
+}
+
+function toggleToday(id){
+  const t = state.tasks.find(x => x.id === id);
+  if(!t) return;
+  t.today = !t.today;
+  t.updatedAt = Date.now();
+  save(); render(); Sync.schedule();
+  announce(t.today ? `${t.title} added to today` : `${t.title} removed from today`);
 }
 
 function render(){
@@ -637,10 +713,15 @@ function render(){
 
   // count line — ref 1's exact phrasing, with the number spelled out
   const open = visible().filter(t => !t.done).length;
-  const scope = state.prefs.filter === 'all' ? '' : state.prefs.filter + ' ';
-  $('#count').textContent = open === 0
-    ? (live().length ? 'All clear for today' : 'Nothing for today')
-    : `You have ${WORDS[open] || open} ${scope}task${open === 1 ? '' : 's'} for today`;
+  const f = state.prefs.filter;
+  const word = WORDS[open] || open;
+  $('#count').textContent = f === 'today'
+    ? (open === 0
+        ? (visible().length ? 'All clear for today' : 'Nothing picked for today')
+        : `You have ${word} task${open === 1 ? '' : 's'} for today`)
+    : (open === 0
+        ? `No open ${f} tasks`
+        : `${word.charAt(0).toUpperCase()}${word.slice(1)} open ${f} task${open === 1 ? '' : 's'}`);
 
   // list
   const items = visible();
@@ -658,7 +739,9 @@ function render(){
   if(items.length === 0){
     const p = document.createElement('p');
     p.className = 'empty';
-    p.textContent = live().length === 0 ? 'Nothing here yet' : 'Nothing in this filter';
+    p.textContent = live().length === 0 ? 'Nothing here yet'
+      : state.prefs.filter === 'today' ? 'Swipe a task in to start the day'
+      : 'Nothing in this filter';
     v.appendChild(p);
   }
 
@@ -674,7 +757,10 @@ function render(){
 
 function itemEl(t){
   const wrap = document.createElement('div');
-  wrap.className = 'item' + (t.done ? ' item--done' : '') + (openId === t.id ? ' item--open' : '');
+  wrap.className = 'item'
+    + (t.done ? ' item--done' : '')
+    + (openId === t.id ? ' item--open' : '')
+    + (t.today ? ' item--today' : '');
   wrap.dataset.id = t.id;
 
   const row = document.createElement('div');
@@ -693,11 +779,21 @@ function itemEl(t){
   disc.setAttribute('aria-label', `${t.title} — ${t.category}. Show notes and actions.`);
   disc.innerHTML = `<span class="ttl"></span><span class="cat"></span>`;
   disc.querySelector('.ttl').textContent = t.title;
-  disc.querySelector('.cat').textContent = t.category;
+  const cat = disc.querySelector('.cat');
+  // in the Today view every row is in Today, so the dot would be noise
+  if(t.today && state.prefs.filter !== 'today'){
+    const dot = document.createElement('span');
+    dot.className = 'dot'; dot.setAttribute('aria-hidden','true');
+    cat.appendChild(dot);
+    cat.appendChild(document.createTextNode(t.category + ' · today'));
+  }else{
+    cat.textContent = t.category;
+  }
   // a drag ends with a click event too — ignore that one, or every reorder
   // would also toggle the notes open
   disc.addEventListener('click', () => {
     if(Drag.consumedClick()) return;
+    if(Swipe.isOpen()){ Swipe.closeAll(); return; }
     openId = openId === t.id ? null : t.id; render();
   });
   disc.addEventListener('keydown', e => {
@@ -706,13 +802,40 @@ function itemEl(t){
     if(e.key === 'ArrowDown'){ e.preventDefault(); nudge(t.id, 1); }
   });
 
+  // desktop equivalent of the swipe: revealed on hover, and reachable by
+  // keyboard, which a thumb gesture never is
+  const rowToday = document.createElement('button');
+  rowToday.className = 'row-today';
+  rowToday.innerHTML = '<svg viewBox="0 0 15 15" aria-hidden="true"><circle cx="7.5" cy="7.5" r="3.4"/><path d="M7.5 .8v2M7.5 12.2v2M.8 7.5h2M12.2 7.5h2M2.75 2.75l1.4 1.4M10.85 10.85l1.4 1.4M12.25 2.75l-1.4 1.4M4.15 10.85l-1.4 1.4"/></svg>';
+  rowToday.setAttribute('aria-pressed', String(!!t.today));
+  rowToday.setAttribute('aria-label', (t.today ? 'Remove from today: ' : 'Add to today: ') + t.title);
+  rowToday.addEventListener('click', e => { e.stopPropagation(); toggleToday(t.id); });
+
   const chev = document.createElement('span');
   chev.className = 'chev';
   chev.setAttribute('aria-hidden','true');
   chev.innerHTML = '<svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg>';
 
-  row.append(chk, disc, chev);
-  row.addEventListener('pointerdown', e => Drag.maybeStart(e, wrap));
+  row.append(chk, disc, rowToday, chev);
+
+  const swipe = document.createElement('div');
+  swipe.className = 'swipe';
+  const actions = document.createElement('div');
+  actions.className = 'swipe-actions';
+  const swipeToday = document.createElement('button');
+  swipeToday.className = 'today-btn';
+  swipeToday.innerHTML = '<svg viewBox="0 0 15 15" aria-hidden="true"><circle cx="7.5" cy="7.5" r="3.4"/><path d="M7.5 .8v2M7.5 12.2v2M.8 7.5h2M12.2 7.5h2M2.75 2.75l1.4 1.4M10.85 10.85l1.4 1.4M12.25 2.75l-1.4 1.4M4.15 10.85l-1.4 1.4"/></svg>';
+  swipeToday.setAttribute('aria-label', (t.today ? 'Remove from today: ' : 'Add to today: ') + t.title);
+  swipeToday.addEventListener('click', e => {
+    e.stopPropagation(); Swipe.closeAll(); toggleToday(t.id);
+  });
+  actions.appendChild(swipeToday);
+  swipe.append(actions, row);
+
+  row.addEventListener('pointerdown', e => {
+    Swipe.maybeStart(e, wrap, row);
+    Drag.maybeStart(e, wrap);
+  });
 
   const detail = document.createElement('div');
   detail.className = 'detail';
@@ -721,16 +844,20 @@ function itemEl(t){
   notes.textContent = t.notes || '';
   const acts = document.createElement('div');
   acts.className = 'acts';
+  const todayAct = document.createElement('button');
+  todayAct.className = 'mini';
+  todayAct.textContent = t.today ? 'Not today' : 'Today';
+  todayAct.addEventListener('click', () => toggleToday(t.id));
   const edit = document.createElement('button');
   edit.className = 'mini'; edit.textContent = 'Edit';
   edit.addEventListener('click', () => openSheet(t.id));
   const del = document.createElement('button');
   del.className = 'mini mini--del'; del.textContent = 'Delete';
   del.addEventListener('click', () => remove(t.id));
-  acts.append(edit, del);
+  acts.append(todayAct, edit, del);
   detail.append(notes, acts);
 
-  wrap.append(row, detail);
+  wrap.append(swipe, detail);
   return wrap;
 }
 
@@ -1155,6 +1282,89 @@ const Sync = (() => {
 })();
 
 /* ═══════════════════════════════════════════════════════════════════
+   SWIPE TO SEND TO TODAY
+
+   Three gestures now start from the same pointerdown on a row:
+     · a vertical drag  -> scroll the list
+     · a horizontal drag -> reveal the Today action
+     · a still press     -> pick the task up to reorder
+
+   They are separated by locking the axis on the first few pixels of
+   movement. Whichever direction wins, wins for the whole gesture, so a
+   sloppy diagonal never does two things at once. Below the threshold
+   nothing is claimed, which is what leaves room for the long-press.
+
+   Reveal-then-tap, not swipe-past-a-threshold: a stray thumb should not
+   silently reshuffle your day.
+   ═══════════════════════════════════════════════════════════════════ */
+const Swipe = (() => {
+  const WIDTH  = 88;   // must match .swipe-actions
+  const LOCK   = 8;    // travel before an axis is claimed
+  const SNAP   = WIDTH * 0.45;
+  let g = null, openRow = null;
+
+  function closeAll(except){
+    if(openRow && openRow !== except){
+      openRow.style.transform = '';
+      openRow.closest('.item')?.classList.remove('swiping');
+      openRow = null;
+    }
+  }
+
+  function maybeStart(e, wrap, row){
+    if(e.button > 0) return;
+    if(e.target.closest('.chk, .mini, .today-btn, .row-today')) return;
+    if(e.pointerType !== 'touch') return;      // mouse users get the hover button
+    if($('#sheet').dataset.open === 'true' || $('#menu').dataset.open === 'true') return;
+
+    g = { wrap, row, id: e.pointerId, x0: e.clientX, y0: e.clientY,
+          axis: null, base: row === openRow ? WIDTH : 0 };
+    window.addEventListener('pointermove', onMove, {passive:false});
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  }
+
+  function onMove(e){
+    if(!g || e.pointerId !== g.id) return;
+    const dx = e.clientX - g.x0, dy = e.clientY - g.y0;
+
+    if(!g.axis){
+      if(Math.abs(dx) < LOCK && Math.abs(dy) < LOCK) return;   // still undecided
+      if(Math.abs(dy) >= Math.abs(dx)){ end(); return; }        // vertical: not ours
+      g.axis = 'x';
+      Drag.abort();                       // the reorder long-press loses this one
+      g.wrap.classList.add('swiping');
+      closeAll(g.row);
+    }
+
+    e.preventDefault();                   // stop the list scrolling under us
+    const x = Math.max(0, Math.min(WIDTH, g.base + dx));
+    g.row.style.transform = `translateX(${x}px)`;
+    g.last = x;
+  }
+
+  function onUp(){
+    if(!g) return;
+    if(g.axis === 'x'){
+      const open = (g.last ?? g.base) > SNAP;
+      g.wrap.classList.remove('swiping');
+      g.row.style.transform = open ? `translateX(${WIDTH}px)` : '';
+      openRow = open ? g.row : null;
+    }
+    end();
+  }
+
+  function end(){
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onUp);
+    g = null;
+  }
+
+  return { maybeStart, closeAll: () => closeAll(null), isOpen: () => !!openRow };
+})();
+
+/* ═══════════════════════════════════════════════════════════════════
    DRAG TO REORDER
 
    Pointer Events, not HTML5 drag-and-drop — the latter does not exist on
@@ -1357,17 +1567,23 @@ const Drag = (() => {
    WIRING
    ═══════════════════════════════════════════════════════════════════ */
 $$('.seg button[data-filter]').forEach(b => b.addEventListener('click', () => {
+  Swipe.closeAll();
   state.prefs.filter = b.dataset.filter; openId = null; save(); render();
 }));
 $('#addBtn').addEventListener('click', () => openSheet(null));
 $('#sheetClose').addEventListener('click', closeSheet);
 $('#scrim').addEventListener('click', () => { closeSheet(); closeMenu(); });
+$('#list').addEventListener('scroll', () => Swipe.closeAll(), {passive:true});
 
 document.addEventListener('keydown', e => {
   const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName);
-  if(e.key === 'Escape'){ Drag.abort(); closeSheet(); closeMenu(); hideToast(); return; }
+  if(e.key === 'Escape'){ Drag.abort(); Swipe.closeAll(); closeSheet(); closeMenu(); hideToast(); return; }
   if(!typing && (e.key === 'n' || e.key === 'N') && !e.metaKey && !e.ctrlKey){
     e.preventDefault(); openSheet(null);
+  }
+  if(!typing && (e.key === 't' || e.key === 'T') && !e.metaKey && !e.ctrlKey){
+    const row = document.activeElement?.closest?.('.item');
+    if(row){ e.preventDefault(); toggleToday(row.dataset.id); }
   }
 });
 
@@ -1377,8 +1593,15 @@ window.addEventListener('storage', e => {
 });
 
 applyTheme();
+rolloverToday();
 render();
 Sync.init();
+
+/* The day can turn over while the app sits open on a desk overnight. */
+document.addEventListener('visibilitychange', () => {
+  if(!document.hidden && rolloverToday()){ render(); Sync.schedule(); }
+});
+setInterval(() => { if(rolloverToday()){ render(); Sync.schedule(); } }, 5 * 60 * 1000);
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', () =>

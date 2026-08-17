@@ -20,7 +20,10 @@ fonts included — and works with no network at all.
 | **Reorder, desktop** | **press and drag a task** |
 | **Reorder, phone** | **hold a task briefly, then drag** |
 | **Reorder, keyboard** | **focus a task, `Alt + ↑` / `Alt + ↓`** |
-| Filter | All / Personal / Work |
+| **Send to Today, phone** | **swipe the task right, tap the sun** |
+| **Send to Today, desktop** | **hover the row, click the sun** |
+| **Send to Today, keyboard** | **focus a task, press `T`** |
+| Filter | Today / Personal / Work |
 | Theme, name, backup | the globe, top right |
 | Close anything | `Esc` |
 
@@ -33,6 +36,23 @@ The array order of `state.tasks` *is* the order. Dragging splices that array, so
 there is no separate index to keep in sync and nothing to migrate.
 
 Deleting a task and clearing completed both offer **Undo** for a few seconds.
+
+## Today
+
+Personal and Work are the backlog; **Today** is what you have committed to. A
+task sent to Today still lives in its own category — it appears in both, marked
+`work · today` in the backlog so you can see what is already allocated.
+
+Unfinished work **carries over** on its own. A task leaves Today only once the
+day you finished it has passed, so completing something at 11pm still reads as
+done rather than vanishing under your thumb. This is tracked internally from the
+completion time; **no dates are shown anywhere in the interface**.
+
+Three gestures start from the same touch on a row: vertical scrolls, horizontal
+reveals the Today action, and a still press picks the task up to reorder. The
+axis is locked on the first 8px of movement, so a sloppy diagonal never does two
+things at once. It is reveal-then-tap rather than swipe-past-a-threshold — a
+stray thumb should not silently reshuffle your day.
 
 ## Where your tasks live
 
