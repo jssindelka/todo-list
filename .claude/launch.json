@@ -1,11 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    {
-      "name": "todo",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": [".claude/serve.py", "4173"],
-      "port": 4173
-    }
+    { "name": "todo", "runtimeExecutable": "python3",
+      "runtimeArgs": ["/private/tmp/claude-501/-Users-josefsindelka-Desktop-claude-context-todo-list/732da1b5-736c-44cf-8070-e664f57d3b9a/scratchpad/serve/.claude/serve.py", "4173"], "port": 4173 }
   ]
 }

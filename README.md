@@ -127,6 +127,11 @@ Both themes were measured, not eyeballed. Every piece of text clears WCAG AA
 lowest value in the app is the chevron at 3.34:1 in light. Full keyboard support,
 labelled controls, visible focus rings, and `prefers-reduced-motion` respected.
 
+Every interactive control is at least 44×44px, Apple's minimum touch target —
+including the checkbox, which keeps its 23px circle but carries a 44px hit area
+via a transparent pseudo-element. Row padding sits on the button rather than its
+wrapper so the full height of a task row is tappable, not just the text.
+
 ## Known trade-offs
 
 - **Uppercase task titles** are faithful to ref 1 but give you roughly 19
