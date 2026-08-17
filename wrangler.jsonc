@@ -1,0 +1,18 @@
+{
+  // Without this file wrangler guesses, and its guess was "deploy the repo
+  // as a static site" — which is why the first build succeeded but synced
+  // nothing. This pins it to the sync worker instead.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "todo-sync",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-08-17",
+  "observability": { "enabled": true },
+
+  // The app itself is served by GitHub Pages; this worker is API only.
+  "kv_namespaces": [
+    {
+      "binding": "TODO",
+      "id": "b46df46e109d4ca69efc6c99e168a1e9"
+    }
+  ]
+}
