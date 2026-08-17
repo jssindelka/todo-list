@@ -340,6 +340,20 @@ button,.chk,.disc,.chip,.seg button{touch-action:manipulation;}
 }
 .menu-act:hover{color:var(--fg);}
 .menu-act--del{color:var(--accent);}
+.sync-hd{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:8px;}
+.sync-hd .mini{padding:6px 0;min-height:auto;}
+.sync-state{
+  margin:0 0 10px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-dim);
+}
+.sync-note{
+  margin:0 0 10px;font-size:10px;line-height:1.7;letter-spacing:.02em;
+  color:var(--fg-dim);text-transform:none;
+}
+#syncLink{
+  width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);
+  padding:0 0 7px;outline:none;font-size:10px;letter-spacing:.02em;
+  color:var(--fg-dim);text-transform:none;border-radius:0;
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    TOAST — undo affordance for destructive actions
@@ -475,6 +489,19 @@ button,.chk,.disc,.chip,.seg button{touch-action:manipulation;}
     <input type="text" id="fName" maxlength="24" autocomplete="off" placeholder="Name">
   </div>
   <div class="menu-grp">
+    <div class="sync-hd">
+      <span class="menu-lbl" style="margin:0;">Sync</span>
+      <button class="mini" id="syncToggle">Turn on</button>
+    </div>
+    <p class="sync-state" id="syncState">Off</p>
+    <div id="syncPanel" hidden>
+      <p class="sync-note">Open this link on your other device to share this list. Treat it like a password.</p>
+      <input type="text" id="syncLink" readonly spellcheck="false">
+      <button class="menu-act" id="syncCopy">Copy link</button>
+    </div>
+  </div>
+
+  <div class="menu-grp">
     <span class="menu-lbl">Your data</span>
     <button class="menu-act" id="expBtn">Export backup</button>
     <button class="menu-act" id="impBtn">Import backup</button>
@@ -499,7 +526,12 @@ button,.chk,.disc,.chip,.seg button{touch-action:manipulation;}
    ═══════════════════════════════════════════════════════════════════ */
 const Store = (() => {
   const KEY = 'todo.v1';
-  const EMPTY = () => ({ version:1, tasks:[], prefs:{ theme:'system', filter:'all', name:'', reordered:false } });
+  const EMPTY = () => ({
+    version:2, tasks:[],
+    prefs:{ theme:'system', filter:'all', name:'', reordered:false },
+    // theme and filter stay device-local on purpose; only the list travels
+    sync:{ key:'', enabled:false, lastSyncAt:0, orderUpdatedAt:0, nameUpdatedAt:0 }
+  });
 
   const localAdapter = {
     read(){
@@ -524,17 +556,25 @@ const Store = (() => {
     if(!d || typeof d !== 'object') return EMPTY();
     const base = EMPTY();
     const tasks = Array.isArray(d.tasks) ? d.tasks.filter(valid).map(normalise) : [];
-    return { version:1, tasks, prefs:{ ...base.prefs, ...(d.prefs||{}) } };
+    return {
+      version:2, tasks,
+      prefs:{ ...base.prefs, ...(d.prefs||{}) },
+      sync:{ ...base.sync, ...(d.sync||{}) }
+    };
   }
-  const valid = t => t && typeof t === 'object' && typeof t.title === 'string' && t.title.trim();
+  const valid = t => t && typeof t === 'object' && typeof t.id !== 'undefined'
+    && (t.deletedAt || (typeof t.title === 'string' && t.title.trim()));
   const normalise = t => ({
     id: String(t.id || uid()),
-    title: String(t.title).slice(0,200),
+    title: String(t.title || '').slice(0,200),
     category: t.category === 'work' ? 'work' : 'personal',
     notes: typeof t.notes === 'string' ? t.notes.slice(0,2000) : '',
     done: !!t.done,
     createdAt: Number(t.createdAt) || Date.now(),
-    completedAt: t.completedAt ? Number(t.completedAt) : null
+    completedAt: t.completedAt ? Number(t.completedAt) : null,
+    // pre-sync data has no updatedAt; createdAt is the honest fallback
+    updatedAt: Number(t.updatedAt) || Number(t.createdAt) || Date.now(),
+    deletedAt: t.deletedAt ? Number(t.deletedAt) : null
   });
 
   let adapter = localAdapter;
@@ -582,9 +622,11 @@ function greeting(){
    splices that array, so there is no separate index to keep in sync and
    nothing to migrate. Display only partitions it: open work above, done
    below, each group keeping its array order. */
+const live = () => state.tasks.filter(t => !t.deletedAt);
+
 function visible(){
   const f = state.prefs.filter;
-  const list = f === 'all' ? state.tasks : state.tasks.filter(t => t.category === f);
+  const list = f === 'all' ? live() : live().filter(t => t.category === f);
   return list.filter(t => !t.done).concat(list.filter(t => t.done));
 }
 
@@ -597,7 +639,7 @@ function render(){
   const open = visible().filter(t => !t.done).length;
   const scope = state.prefs.filter === 'all' ? '' : state.prefs.filter + ' ';
   $('#count').textContent = open === 0
-    ? (state.tasks.length ? 'All clear for today' : 'Nothing for today')
+    ? (live().length ? 'All clear for today' : 'Nothing for today')
     : `You have ${WORDS[open] || open} ${scope}task${open === 1 ? '' : 's'} for today`;
 
   // list
@@ -616,7 +658,7 @@ function render(){
   if(items.length === 0){
     const p = document.createElement('p');
     p.className = 'empty';
-    p.textContent = state.tasks.length === 0 ? 'Nothing here yet' : 'Nothing in this filter';
+    p.textContent = live().length === 0 ? 'Nothing here yet' : 'Nothing in this filter';
     v.appendChild(p);
   }
 
@@ -701,6 +743,7 @@ function toggle(id){
   const t = state.tasks[i];
   t.done = !t.done;
   t.completedAt = t.done ? Date.now() : null;
+  t.updatedAt = Date.now();
 
   // move it in the array rather than sorting around it: finishing drops the
   // task to the bottom, un-finishing returns it to the end of the open group
@@ -712,7 +755,8 @@ function toggle(id){
     state.tasks.forEach((x,j) => { if(!x.done) lastOpen = j; });
     state.tasks.splice(lastOpen + 1, 0, t);
   }
-  save(); render();
+  bumpOrder();
+  save(); render(); Sync.schedule();
 }
 
 /* Keyboard equivalent of a drag — WCAG 2.5.7 requires one, and it is the
@@ -741,8 +785,14 @@ function commitOrder(newVisible){
   let k = 0;
   state.tasks = state.tasks.map(t => ids.has(t.id) ? newVisible[k++] : t);
   if(!state.prefs.reordered) state.prefs.reordered = true;
-  save();
+  bumpOrder();
+  save(); Sync.schedule();
 }
+
+/* Ordering cannot merge task-by-task — two devices with different orders
+   have no automatic reconciliation that isn't a guess. So it is a single
+   whole-document decision, and this is the timestamp that decides it. */
+function bumpOrder(){ state.sync.orderUpdatedAt = Date.now(); }
 
 function announce(msg){
   const el = $('#live');
@@ -750,21 +800,32 @@ function announce(msg){
   setTimeout(() => { el.textContent = msg; }, 30);
 }
 
+/* Deleting writes a tombstone rather than removing the row. Without it a
+   device holding an older copy would re-upload the task on its next sync
+   and it would come back from the dead. */
 function remove(id){
-  const i = state.tasks.findIndex(x => x.id === id);
-  if(i < 0) return;
-  const [gone] = state.tasks.splice(i,1);
+  const t = state.tasks.find(x => x.id === id);
+  if(!t || t.deletedAt) return;
+  t.deletedAt = t.updatedAt = Date.now();
   if(openId === id) openId = null;
-  save(); render();
-  showToast('Task deleted', () => { state.tasks.splice(i,0,gone); save(); render(); });
+  save(); render(); Sync.schedule();
+  showToast('Task deleted', () => {
+    t.deletedAt = null; t.updatedAt = Date.now();
+    save(); render(); Sync.schedule();
+  });
 }
 
 function clearCompleted(){
-  const gone = state.tasks.filter(t => t.done);
+  const gone = live().filter(t => t.done);
   if(!gone.length){ showToast('Nothing completed yet', null); return; }
-  state.tasks = state.tasks.filter(t => !t.done);
-  save(); render(); closeMenu();
-  showToast(`${gone.length} cleared`, () => { state.tasks = state.tasks.concat(gone); save(); render(); });
+  const at = Date.now();
+  gone.forEach(t => { t.deletedAt = at; t.updatedAt = at; });
+  save(); render(); closeMenu(); Sync.schedule();
+  showToast(`${gone.length} cleared`, () => {
+    const back = Date.now();
+    gone.forEach(t => { t.deletedAt = null; t.updatedAt = back; });
+    save(); render(); Sync.schedule();
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -806,18 +867,20 @@ $('#form').addEventListener('submit', e => {
 
   if(editingId){
     const t = state.tasks.find(x => x.id === editingId);
-    if(t){ t.title = title; t.notes = notes; t.category = draftCat; }
+    if(t){ t.title = title; t.notes = notes; t.category = draftCat; t.updatedAt = Date.now(); }
   }else{
     state.tasks.push({
       id: uid(), title, category: draftCat, notes,
-      done:false, createdAt: Date.now(), completedAt:null
+      done:false, createdAt: Date.now(), completedAt:null,
+      updatedAt: Date.now(), deletedAt:null
     });
+    bumpOrder();
     // if the new task would be hidden by the active filter, show it
     if(state.prefs.filter !== 'all' && state.prefs.filter !== draftCat){
       state.prefs.filter = draftCat;
     }
   }
-  save(); closeSheet(); render();
+  save(); closeSheet(); render(); Sync.schedule();
   $('#list').scrollTop = $('#list').scrollHeight;
 });
 
@@ -852,7 +915,9 @@ $$('.menu button[data-theme]').forEach(b => b.addEventListener('click', () => {
 
 $('#fName').addEventListener('input', e => {
   state.prefs.name = e.target.value.replace(/\s+/g,' ').slice(0,24);
+  state.sync.nameUpdatedAt = Date.now();
   save(); $('#greet').textContent = greeting();
+  Sync.schedule();
 });
 
 function applyTheme(){
@@ -886,7 +951,8 @@ $('#impFile').addEventListener('change', async e => {
     if(!parsed.tasks.length && !confirm('That backup has no tasks. Import anyway?')) return;
     const before = state;
     state = parsed;
-    applyTheme(); save(); render(); closeMenu();
+    bumpOrder();
+    applyTheme(); save(); render(); closeMenu(); Sync.schedule();
     showToast(`${parsed.tasks.length} imported`, () => { state = before; applyTheme(); save(); render(); });
   }catch(err){
     console.warn(err);
@@ -895,6 +961,23 @@ $('#impFile').addEventListener('change', async e => {
 });
 
 $('#clrBtn').addEventListener('click', clearCompleted);
+
+$('#syncToggle').addEventListener('click', () => {
+  if(Sync.isOn()){ Sync.disable(); showToast('Sync off', null); }
+  else Sync.enable();
+});
+$('#syncCopy').addEventListener('click', async () => {
+  const link = Sync.link();
+  try{
+    await navigator.clipboard.writeText(link);
+    showToast('Link copied', null);
+  }catch(_){
+    // clipboard is blocked outside a secure context or without permission
+    const f = $('#syncLink'); f.focus(); f.select();
+    showToast('Press copy to copy', null);
+  }
+});
+$('#syncLink').addEventListener('focus', e => e.target.select());
 
 /* ═══════════════════════════════════════════════════════════════════
    TOAST
@@ -909,6 +992,167 @@ function showToast(msg, restore){
 }
 function hideToast(){ $('#toast').dataset.open = 'false'; undo = null; }
 $('#toastAct').addEventListener('click', () => { if(undo) undo(); hideToast(); });
+
+/* ═══════════════════════════════════════════════════════════════════
+   SYNC
+
+   The second adapter the storage seam was built for. Local writes still
+   go to localStorage first and always succeed — the network is treated
+   as a slow, unreliable second opinion, never as a gatekeeper. The app
+   works identically with sync off or with no signal.
+
+   The list key is the only credential. It lives in the URL fragment,
+   which browsers never send to any server, and is copied into
+   localStorage so the installed app (which launches without the
+   fragment) still knows it.
+   ═══════════════════════════════════════════════════════════════════ */
+const Sync = (() => {
+  const ENDPOINT = 'https://todo-sync.dry-wave-17f6.workers.dev';
+  const DEBOUNCE = 1500;     // collapse a burst of edits into one write
+  const POLL     = 45000;    // while the app is open and visible
+  let timer = 0, poll = 0, inFlight = false, dirty = false, status = 'idle';
+
+  const on = () => !!(state.sync.enabled && state.sync.key);
+
+  function newKey(){
+    const b = new Uint8Array(24);
+    crypto.getRandomValues(b);                       // 192 bits
+    return btoa(String.fromCharCode(...b)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }
+
+  function link(){
+    return location.origin + location.pathname + '#k=' + state.sync.key;
+  }
+
+  /* The document that travels. Device preferences deliberately stay
+     behind — you do not want your phone forcing dark mode on your
+     laptop just because it synced last. */
+  function outbound(){
+    return {
+      tasks: state.tasks,
+      order: state.tasks.map(t => t.id),
+      orderUpdatedAt: state.sync.orderUpdatedAt || 0,
+      name: state.prefs.name || '',
+      nameUpdatedAt: state.sync.nameUpdatedAt || 0
+    };
+  }
+
+  function absorb(doc){
+    if(!doc || !Array.isArray(doc.tasks)) return false;
+    const before = JSON.stringify(state.tasks.map(t => [t.id, t.updatedAt, t.deletedAt]));
+    state.tasks = Store.migrate({ tasks: doc.tasks }).tasks;
+    state.sync.orderUpdatedAt = doc.orderUpdatedAt || state.sync.orderUpdatedAt || 0;
+    if((doc.nameUpdatedAt || 0) > (state.sync.nameUpdatedAt || 0)){
+      state.prefs.name = doc.name || '';
+      state.sync.nameUpdatedAt = doc.nameUpdatedAt;
+    }
+    state.sync.lastSyncAt = Date.now();
+    save();
+    return before !== JSON.stringify(state.tasks.map(t => [t.id, t.updatedAt, t.deletedAt]));
+  }
+
+  async function call(path, body){
+    const res = await fetch(ENDPOINT + path, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ key: state.sync.key, ...body })
+    });
+    if(!res.ok) throw new Error((await res.json().catch(()=>({}))).error || res.status);
+    return res.json();
+  }
+
+  async function run(){
+    if(!on() || inFlight) return;
+    if(!navigator.onLine){ setStatus('offline'); dirty = true; return; }
+    inFlight = true; dirty = false; setStatus('syncing');
+    try{
+      // push returns the merged document, so one round trip both sends
+      // our changes and collects whatever the other device did
+      const { doc } = await call('/push', { doc: outbound() });
+      const changed = absorb(doc);
+      setStatus('ok');
+      if(changed) render();
+    }catch(err){
+      console.warn('sync failed', err);
+      dirty = true;
+      setStatus(String(err.message||err) === 'origin_not_allowed' ? 'blocked' : 'error');
+    }finally{
+      inFlight = false;
+      if(dirty) schedule();
+    }
+  }
+
+  function schedule(){
+    if(!on()) return;
+    dirty = true;
+    clearTimeout(timer);
+    timer = setTimeout(run, DEBOUNCE);
+  }
+
+  function setStatus(s){ status = s; paintStatus(); }
+
+  function paintStatus(){
+    const el = $('#syncState'); if(!el) return;
+    if(!on()){ el.textContent = 'Off'; return; }
+    const ago = state.sync.lastSyncAt
+      ? Math.round((Date.now() - state.sync.lastSyncAt)/1000) : null;
+    el.textContent =
+      status === 'syncing' ? 'Syncing…' :
+      status === 'offline' ? 'Offline — will retry' :
+      status === 'blocked' ? 'Blocked by server' :
+      status === 'error'   ? 'Failed — will retry' :
+      ago === null         ? 'On' :
+      ago < 60             ? 'Synced just now' :
+      `Synced ${Math.round(ago/60)} min ago`;
+  }
+
+  async function enable(existingKey){
+    state.sync.key = existingKey || state.sync.key || newKey();
+    state.sync.enabled = true;
+    save();
+    await run();
+    paintUI();
+  }
+
+  function disable(){
+    state.sync.enabled = false;
+    clearTimeout(timer); clearInterval(poll); poll = 0;
+    save(); paintUI();
+    // the key is kept, so turning sync back on rejoins the same list
+  }
+
+  function paintUI(){
+    $('#syncPanel').hidden = !on();
+    $('#syncToggle').textContent = on() ? 'Turn off' : 'Turn on';
+    $('#syncLink').value = on() ? link() : '';
+    paintStatus();
+    if(on() && !poll) poll = setInterval(() => { if(!document.hidden) run(); }, POLL);
+  }
+
+  /* A key arriving in the fragment means "join this list". Adopt it,
+     then scrub it from the address bar so it does not sit in a shared
+     screenshot or get bookmarked by accident. */
+  function adoptFromUrl(){
+    const m = location.hash.match(/[#&]k=([A-Za-z0-9_-]{32,64})/);
+    if(!m) return false;
+    state.sync.key = m[1];
+    state.sync.enabled = true;
+    save();
+    history.replaceState(null, '', location.pathname + location.search);
+    return true;
+  }
+
+  function init(){
+    const joined = adoptFromUrl();
+    paintUI();
+    if(on()) run();
+    if(joined) showToast('Joined synced list', null);
+    window.addEventListener('online',  () => { if(on()) run(); });
+    window.addEventListener('offline', () => setStatus('offline'));
+    document.addEventListener('visibilitychange', () => { if(!document.hidden && on()) run(); });
+  }
+
+  return { init, enable, disable, schedule, paintUI, link, isOn: on, run };
+})();
 
 /* ═══════════════════════════════════════════════════════════════════
    DRAG TO REORDER
@@ -1134,6 +1378,7 @@ window.addEventListener('storage', e => {
 
 applyTheme();
 render();
+Sync.init();
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', () =>

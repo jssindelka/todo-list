@@ -36,13 +36,41 @@ Deleting a task and clearing completed both offer **Undo** for a few seconds.
 
 ## Where your tasks live
 
-In this browser's `localStorage`, on this device. Nothing is sent anywhere and
-there is no account.
+Locally in each browser, always. Sync is optional and off by default.
 
-**This means your phone and your laptop keep separate lists.** That was a
-deliberate v1 decision — see *Adding sync* below. Until then, `Export backup` in
-the menu writes a JSON file you can move across manually, and `Import backup`
-reads it in.
+**With sync off:** everything stays in `localStorage` on that device, nothing
+leaves the machine, and your phone and laptop keep separate lists.
+
+**With sync on** (globe → Sync → Turn on): the list is mirrored through a
+Cloudflare Worker so both devices share it. Turning it on generates a link;
+open that link on your other device and it joins the same list.
+
+The link *is* the credential — 192 bits of randomness, no password, no account.
+Treat it like a password. It lives in the URL fragment, which browsers never
+transmit, and the app scrubs it from the address bar as soon as it is adopted.
+
+Local writes never wait for the network. Edits save instantly and sync in the
+background; offline changes flush on reconnect.
+
+### How conflicts resolve
+
+- **Per task, newest edit wins.** Edit different tasks on two devices while both
+  are offline and both survive.
+- **Deletions are tombstones**, kept 30 days. Without them a device holding an
+  older copy re-uploads a task you deleted elsewhere and it returns from the
+  dead — the classic sync bug.
+- **Ordering is whole-document**: whoever reordered most recently wins.
+  Reconciling two different orderings automatically is a guess, so it isn't
+  attempted. Task contents still merge per task.
+- **Theme and active filter stay device-local** on purpose — your phone should
+  not force dark mode on your laptop.
+
+Known limit: Cloudflare KV has no transactions, so two devices pushing in the
+same instant could interleave. Vanishingly unlikely for one person, and the next
+sync reconciles it. Fixing it properly means Durable Objects.
+
+`Export backup` / `Import backup` still work regardless, and are the answer if
+you ever want a copy that does not depend on any of this.
 
 ---
 
