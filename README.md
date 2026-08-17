@@ -24,7 +24,8 @@ fonts included — and works with no network at all.
 | **Send to Today, desktop** | **hover the row, click the sun** |
 | **Send to Today, keyboard** | **focus a task, press `T`** |
 | Filter | Today / Personal / Work |
-| Theme, name, backup | the globe, top right |
+| **Light / dark** | **tap the globe, top right** |
+| Sync, name, backup | the three dots, top right |
 | Close anything | `Esc` |
 
 Reordering uses Pointer Events rather than HTML5 drag-and-drop, which does not
