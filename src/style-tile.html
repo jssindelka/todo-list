@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TODO — Style Tile</title>
+<style>
+/* ══════════════════════════════════════════════════════════════════
+   FONTS — embedded, offline-safe. All three are variable fonts, so
+   one file per family covers every weight we use.
+   ══════════════════════════════════════════════════════════════════ */
+@font-face{font-family:'Doto';font-style:normal;font-weight:100 900;font-display:block;
+  src:url(data:font/woff2;base64,@FONT_DOTO@) format('woff2');}
+@font-face{font-family:'JB Mono';font-style:normal;font-weight:100 800;font-display:block;
+  src:url(data:font/woff2;base64,@FONT_MONO@) format('woff2');}
+@font-face{font-family:'Instrument Serif';font-style:normal;font-weight:400;font-display:block;
+  src:url(data:font/woff2;base64,@FONT_SERIF@) format('woff2');}
+
+/* ══════════════════════════════════════════════════════════════════
+   TOKENS
+   ══════════════════════════════════════════════════════════════════ */
+.t-dark{
+  --bg:#000000;  --bg-elev:#0B0B0B; --bg-sheet:#0E0E0E;
+  --line:rgba(255,255,255,.17); --line-soft:rgba(255,255,255,.075);
+  --fg:#FFFFFF;  --fg-dim:rgba(255,255,255,.52); --fg-faint:rgba(255,255,255,.28);
+  --knock:#000000;
+}
+.t-light{
+  --bg:#E9E9E7;  --bg-elev:#F1F1EF; --bg-sheet:#F6F6F4;
+  --line:rgba(0,0,0,.22);  --line-soft:rgba(0,0,0,.09);
+  --fg:#0A0A0A;  --fg-dim:rgba(0,0,0,.50);  --fg-faint:rgba(0,0,0,.28);
+  --knock:#F1F1EF;
+}
+:root{
+  --accent:#D71921;                 /* Nothing red — destructive only */
+  --f-dot:'Doto',ui-monospace,monospace;
+  --f-mono:'JB Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --f-serif:'Instrument Serif',Georgia,'Times New Roman',serif;
+  --u:4px;                          /* spacing base */
+  --pad:24px;                       /* page gutter */
+}
+
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0; background:#000; color:#fff;
+  font-family:var(--f-mono); font-weight:400;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TILE CHROME  (scaffolding for this spec page only — not the app)
+   ══════════════════════════════════════════════════════════════════ */
+.wrap{max-width:1180px;margin:0 auto;padding:56px var(--pad) 120px;}
+
+.tile-head{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
+  padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,.17);flex-wrap:wrap;
+}
+.tile-head h1{
+  font-family:var(--f-dot);font-size:clamp(38px,7vw,64px);font-weight:700;
+  line-height:.9;letter-spacing:.02em;margin:0;text-transform:uppercase;
+}
+.tile-head .meta{
+  font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+  color:rgba(255,255,255,.52);text-align:right;line-height:2;
+}
+
+section{margin-top:72px;}
+.sec-label{
+  display:flex;align-items:center;gap:14px;margin-bottom:28px;
+  font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.52);
+}
+.sec-label .n{font-family:var(--f-dot);font-size:15px;letter-spacing:.05em;color:#fff;font-weight:700;}
+.sec-label .rule{flex:1;height:1px;background:rgba(255,255,255,.17);}
+.note{
+  font-size:11px;line-height:1.85;letter-spacing:.03em;
+  color:rgba(255,255,255,.52);max-width:64ch;margin:0 0 26px;
+}
+.note b{color:#fff;font-weight:500;}
+
+.grid2{display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));}
+
+/* a bordered demo cell that carries a theme */
+.cell{
+  background:var(--bg);color:var(--fg);border:1px solid var(--line);
+  padding:28px 24px;position:relative;
+}
+.cell-tag{
+  position:absolute;top:0;right:0;font-size:9px;letter-spacing:.16em;text-transform:uppercase;
+  padding:5px 9px;background:var(--fg);color:var(--knock);font-weight:500;
+}
+
+/* ── corner ticks: technical/exposed-grid motif ─────────────────── */
+.ticks::before,.ticks::after{
+  content:'';position:absolute;width:9px;height:9px;pointer-events:none;
+  border:1px solid var(--line);
+}
+.ticks::before{top:-1px;left:-1px;border-right:0;border-bottom:0;}
+.ticks::after{bottom:-1px;right:-1px;border-left:0;border-top:0;}
+
+/* ══════════════════════════════════════════════════════════════════
+   01 · DISPLAY TYPE — the one open A/B
+   ══════════════════════════════════════════════════════════════════ */
+.spec{padding:34px 26px;}
+.spec .opt{
+  font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--fg-dim);
+  margin-bottom:18px;display:flex;gap:10px;align-items:center;
+}
+.spec .opt .dot{width:5px;height:5px;border-radius:50%;background:var(--fg);}
+.greet-dot{
+  font-family:var(--f-dot);font-weight:700;font-size:clamp(26px,4.6vw,38px);
+  line-height:1.06;letter-spacing:.01em;text-transform:uppercase;margin:0;
+}
+.greet-serif{
+  font-family:var(--f-serif);font-weight:400;font-size:clamp(32px,5.6vw,46px);
+  line-height:1.04;letter-spacing:-.01em;margin:0;
+}
+.spec .why{
+  margin:22px 0 0;padding-top:18px;border-top:1px solid var(--line-soft);
+  font-size:10px;line-height:1.9;letter-spacing:.04em;color:var(--fg-dim);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   02 · UI TYPE SCALE
+   ══════════════════════════════════════════════════════════════════ */
+.scale-row{
+  display:grid;grid-template-columns:118px 1fr;gap:20px;align-items:baseline;
+  padding:16px 0;border-bottom:1px solid var(--line-soft);
+}
+.scale-row:last-child{border-bottom:0;}
+.scale-row .k{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint);}
+
+.ty-count  {font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:400;}
+.ty-title  {font-size:13px;letter-spacing:.07em;text-transform:uppercase;font-weight:500;}
+.ty-cat    {font-size:11px;letter-spacing:.1em; text-transform:uppercase;color:var(--fg-dim);}
+.ty-tab    {font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;}
+.ty-note   {font-size:12px;letter-spacing:.02em;line-height:1.75;color:var(--fg-dim);text-transform:none;}
+.ty-num    {font-family:var(--f-dot);font-size:22px;font-weight:700;letter-spacing:.04em;}
+
+/* ══════════════════════════════════════════════════════════════════
+   03 · CHECKBOX
+   ══════════════════════════════════════════════════════════════════ */
+.box-set{display:flex;gap:34px;flex-wrap:wrap;}
+.box-item{text-align:center;}
+.box-item .cap{
+  margin-top:12px;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-dim);
+}
+.chk{
+  width:23px;height:23px;border-radius:50%;border:1px solid var(--fg-faint);
+  display:grid;place-items:center;background:transparent;
+  transition:border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.chk svg{width:11px;height:11px;stroke:var(--knock);stroke-width:2.2;fill:none;
+  stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:16;stroke-dashoffset:16;transition:stroke-dashoffset .22s ease .04s;}
+.chk--hover{border-color:var(--fg);}
+.chk--done{background:var(--fg);border-color:var(--fg);}
+.chk--done svg{stroke-dashoffset:0;}
+
+/* ══════════════════════════════════════════════════════════════════
+   04 · TASK ROW
+   ══════════════════════════════════════════════════════════════════ */
+.rows{border-top:1px solid var(--line-soft);}
+.row{
+  display:grid;grid-template-columns:23px 1fr 14px;gap:16px;align-items:center;
+  padding:14px 0;border-bottom:1px solid var(--line-soft);
+}
+.row .body{min-width:0;}
+.row .t{
+  font-size:13px;letter-spacing:.07em;text-transform:uppercase;font-weight:500;
+  line-height:1.35;overflow-wrap:anywhere;
+}
+.row .c{
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-dim);margin-top:3px;
+}
+.row .chev{color:var(--fg-faint);display:grid;place-items:center;}
+.row .chev svg{width:7px;height:12px;stroke:currentColor;stroke-width:1.4;fill:none;}
+.row--done .t{color:var(--fg-faint);text-decoration:line-through;text-decoration-thickness:1px;}
+.row--done .c{color:var(--fg-faint);}
+.row--open .chev{transform:rotate(90deg);}
+
+.row-notes{
+  padding:0 0 18px 39px;border-bottom:1px solid var(--line-soft);
+}
+.row-notes .txt{
+  font-size:12px;line-height:1.8;letter-spacing:.02em;color:var(--fg-dim);
+  padding-left:14px;border-left:1px solid var(--line);
+}
+.row-acts{display:flex;gap:20px;margin-top:14px;padding-left:14px;}
+.mini{
+  background:none;border:0;padding:0;cursor:pointer;font-family:inherit;
+  font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--fg-dim);
+}
+.mini--del{color:var(--accent);}
+
+/* ══════════════════════════════════════════════════════════════════
+   05 · CONTROLS
+   ══════════════════════════════════════════════════════════════════ */
+.bar{display:flex;align-items:center;gap:12px;}
+.seg{
+  flex:1;display:flex;border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px;
+}
+.seg button{
+  flex:1;border:0;border-radius:999px;padding:9px 4px;cursor:pointer;
+  font-family:inherit;font-size:10px;letter-spacing:.13em;text-transform:uppercase;font-weight:500;
+  background:transparent;color:var(--fg-dim);transition:background .2s,color .2s;
+}
+.seg button[aria-selected=true]{background:var(--fg);color:var(--knock);}
+.fab{
+  width:46px;height:46px;flex:0 0 46px;border-radius:50%;border:1px solid var(--line);
+  background:transparent;color:var(--fg);cursor:pointer;display:grid;place-items:center;
+  transition:background .2s,color .2s;
+}
+.fab svg{width:15px;height:15px;stroke:currentColor;stroke-width:1.3;}
+.fab:hover{background:var(--fg);color:var(--knock);}
+
+/* ══════════════════════════════════════════════════════════════════
+   06 · ADD SHEET
+   ══════════════════════════════════════════════════════════════════ */
+.sheet{
+  background:var(--bg-sheet);border:1px solid var(--line);padding:26px 22px 22px;
+  border-radius:18px 18px 0 0;
+}
+.sheet-hd{
+  display:flex;justify-content:space-between;align-items:center;
+  padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid var(--line-soft);
+}
+.sheet-hd .ttl{font-size:10px;letter-spacing:.2em;text-transform:uppercase;}
+.field{margin-bottom:20px;}
+.field > label{
+  display:block;font-size:9px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--fg-faint);margin-bottom:9px;
+}
+.field input[type=text],.field textarea{
+  width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);
+  color:var(--fg);font-family:inherit;padding:0 0 9px;outline:none;resize:none;
+}
+.field input[type=text]{font-size:14px;letter-spacing:.06em;text-transform:uppercase;}
+.field textarea{font-size:12.5px;line-height:1.7;letter-spacing:.02em;min-height:56px;}
+.field input::placeholder,.field textarea::placeholder{color:var(--fg-faint);}
+.field input:focus,.field textarea:focus{border-bottom-color:var(--fg);}
+.chips{display:flex;gap:8px;}
+.chip{
+  border:1px solid var(--line);border-radius:999px;padding:8px 16px;cursor:pointer;
+  background:transparent;color:var(--fg-dim);font-family:inherit;
+  font-size:10px;letter-spacing:.13em;text-transform:uppercase;transition:.2s;
+}
+.chip[aria-pressed=true]{background:var(--fg);color:var(--knock);border-color:var(--fg);}
+.btn{
+  width:100%;padding:15px;border:1px solid var(--fg);background:var(--fg);color:var(--knock);
+  font-family:inherit;font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+  font-weight:500;cursor:pointer;border-radius:999px;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   07 · PHONE PREVIEW
+   ══════════════════════════════════════════════════════════════════ */
+.phones{display:flex;gap:34px;flex-wrap:wrap;justify-content:center;}
+.phone{
+  width:340px;height:690px;border-radius:44px;overflow:hidden;position:relative;
+  background:var(--bg);color:var(--fg);
+  border:1px solid var(--line);display:flex;flex-direction:column;
+  padding:28px 22px 20px;
+}
+.notch{
+  width:96px;height:24px;border-radius:999px;background:var(--fg);opacity:.92;
+  position:absolute;top:11px;left:50%;transform:translateX(-50%);
+}
+.p-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-top:26px;}
+.p-greet{font-family:var(--f-dot);font-weight:700;font-size:27px;line-height:1.08;
+  text-transform:uppercase;letter-spacing:.01em;margin:0;}
+.globe{width:38px;height:38px;flex:0 0 38px;stroke:var(--fg);fill:none;stroke-width:1;opacity:.85;}
+.p-rule{height:1px;background:var(--line);margin:18px 0 14px;}
+.p-count{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--fg-dim);
+  display:flex;align-items:baseline;gap:8px;}
+.p-count .num{font-family:var(--f-dot);font-size:15px;font-weight:700;color:var(--fg);letter-spacing:.04em;}
+.p-spacer{flex:1;min-height:20px;position:relative;}
+/* dot-matrix field in the empty space — Nothing's exposed-grid motif */
+.p-spacer::after{
+  content:'';position:absolute;inset:22px 0;opacity:.5;
+  background-image:radial-gradient(var(--line) .9px,transparent .9px);
+  background-size:15px 15px;
+  -webkit-mask-image:linear-gradient(180deg,transparent,#000 38%,#000 62%,transparent);
+          mask-image:linear-gradient(180deg,transparent,#000 38%,#000 62%,transparent);
+}
+.p-foot{padding-top:14px;border-top:1px solid var(--line);margin-top:12px;}
+
+@media (max-width:520px){
+  .wrap{padding:36px 18px 90px;}
+  section{margin-top:52px;}
+  .phone{width:100%;max-width:340px;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="tile-head">
+    <h1>Todo<br>Style&nbsp;Tile</h1>
+    <div class="meta">
+      Direction · Ref 01 × Nothing<br>
+      Doto · JetBrains Mono · Instrument Serif<br>
+      Embedded 67 KB · Offline · v0.1
+    </div>
+  </header>
+
+  <!-- ════════════════ 01 · DISPLAY TYPE ════════════════ -->
+  <section>
+    <div class="sec-label"><span class="n">01</span> Display type — one decision for you<span class="rule"></span></div>
+    <p class="note">
+      This is the only fork left in the look. Everything else in the app is monospace either way.
+      <b>A</b> goes literally Nothing: dot-matrix, machine-like, unmistakable. <b>B</b> keeps ref 1's
+      serif headline, which softens the whole screen and reads more editorial. Pick one, or say
+      "A for numbers, B for the greeting" — that hybrid also works.
+    </p>
+    <div class="grid2">
+      <div class="cell t-dark ticks spec">
+        <span class="cell-tag">A · Doto</span>
+        <div class="opt"><span class="dot"></span>Dot-matrix display</div>
+        <p class="greet-dot">Good Morning,<br>Josef</p>
+        <p class="why">Machine-drawn, unmistakably Nothing. Strong personality, but it is a display face only — every other word in the app must stay mono.</p>
+      </div>
+      <div class="cell t-dark ticks spec">
+        <span class="cell-tag">B · Serif</span>
+        <div class="opt"><span class="dot"></span>Editorial serif</div>
+        <p class="greet-serif">Good Morning,<br>Josef</p>
+        <p class="why">Straight from ref 1. Warmer, calmer, better with long names. Reads editorial rather than technical — less Nothing, more magazine.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ 02 · TYPE SCALE ════════════════ -->
+  <section>
+    <div class="sec-label"><span class="n">02</span> UI type scale<span class="rule"></span></div>
+    <p class="note">
+      Every UI string is JetBrains Mono, uppercase, widely tracked — ref 1's exact treatment.
+      Task titles are uppercase too, as in the reference; that is the one call worth sanity-checking,
+      since long titles get harder to scan in caps. Numerals use Doto so counts read as a readout.
+    </p>
+    <div class="grid2">
+      <div class="cell t-dark ticks">
+        <span class="cell-tag">Dark</span>
+        <div class="scale-row"><span class="k">Count / 11</span><span class="ty-count">You have four tasks for today</span></div>
+        <div class="scale-row"><span class="k">Title / 13</span><span class="ty-title">Redesign website</span></div>
+        <div class="scale-row"><span class="k">Category / 11</span><span class="ty-cat">Work</span></div>
+        <div class="scale-row"><span class="k">Tab / 10</span><span class="ty-tab">Personal</span></div>
+        <div class="scale-row"><span class="k">Notes / 12</span><span class="ty-note">Sentence case here — the one place we drop the caps, because notes are prose and want to be readable.</span></div>
+        <div class="scale-row"><span class="k">Numeral / 22</span><span class="ty-num">04</span></div>
+      </div>
+      <div class="cell t-light ticks">
+        <span class="cell-tag">Light</span>
+        <div class="scale-row"><span class="k">Count / 11</span><span class="ty-count">You have four tasks for today</span></div>
+        <div class="scale-row"><span class="k">Title / 13</span><span class="ty-title">Redesign website</span></div>
+        <div class="scale-row"><span class="k">Category / 11</span><span class="ty-cat">Work</span></div>
+        <div class="scale-row"><span class="k">Tab / 10</span><span class="ty-tab">Personal</span></div>
+        <div class="scale-row"><span class="k">Notes / 12</span><span class="ty-note">Sentence case here — the one place we drop the caps, because notes are prose and want to be readable.</span></div>
+        <div class="scale-row"><span class="k">Numeral / 22</span><span class="ty-num">04</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ 03 · CHECKBOX ════════════════ -->
+  <section>
+    <div class="sec-label"><span class="n">03</span> Checkbox states<span class="rule"></span></div>
+    <p class="note">
+      Hollow 23px circle from ref 1. On completion it fills solid and a knocked-out check draws itself
+      in ~220ms. That draw-on is the single moment of motion in the app — completing a task should feel
+      like the reward it is.
+    </p>
+    <div class="grid2">
+      <div class="cell t-dark ticks">
+        <span class="cell-tag">Dark</span>
+        <div class="box-set">
+          <div class="box-item"><div class="chk"></div><div class="cap">Default</div></div>
+          <div class="box-item"><div class="chk chk--hover"></div><div class="cap">Hover</div></div>
+          <div class="box-item"><div class="chk chk--done"><svg viewBox="0 0 12 12"><path d="M1.6 6.2 4.4 9 10.4 3"/></svg></div><div class="cap">Done</div></div>
+        </div>
+      </div>
+      <div class="cell t-light ticks">
+        <span class="cell-tag">Light</span>
+        <div class="box-set">
+          <div class="box-item"><div class="chk"></div><div class="cap">Default</div></div>
+          <div class="box-item"><div class="chk chk--hover"></div><div class="cap">Hover</div></div>
+          <div class="box-item"><div class="chk chk--done"><svg viewBox="0 0 12 12"><path d="M1.6 6.2 4.4 9 10.4 3"/></svg></div><div class="cap">Done</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ 04 · TASK ROW ════════════════ -->
+  <section>
+    <div class="sec-label"><span class="n">04</span> Task row · default, done, expanded<span class="rule"></span></div>
+    <p class="note">
+      Ref 1's chevron gets a real job: it rotates and opens the notes inline underneath, rather than
+      pushing you to a separate screen. Fewer moving parts, and you never lose your place in the list.
+      Delete lives in there too — the only red in the entire app.
+    </p>
+    <div class="grid2">
+      <div class="cell t-dark ticks">
+        <span class="cell-tag">Dark</span>
+        <div class="rows">
+          <div class="row">
+            <div class="chk"></div>
+            <div class="body"><div class="t">Make moodboards</div><div class="c">Work</div></div>
+            <div class="chev"><svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg></div>
+          </div>
+          <div class="row row--done">
+            <div class="chk chk--done"><svg viewBox="0 0 12 12"><path d="M1.6 6.2 4.4 9 10.4 3"/></svg></div>
+            <div class="body"><div class="t">Send mum flowers</div><div class="c">Personal</div></div>
+            <div class="chev"><svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg></div>
+          </div>
+          <div class="row row--open">
+            <div class="chk"></div>
+            <div class="body"><div class="t">Redesign website</div><div class="c">Work</div></div>
+            <div class="chev"><svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg></div>
+          </div>
+          <div class="row-notes">
+            <div class="txt">Start with the case-study template. Ask Sam for the old analytics export before touching the nav.</div>
+            <div class="row-acts"><button class="mini">Edit</button><button class="mini mini--del">Delete</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="cell t-light ticks">
+        <span class="cell-tag">Light</span>
+        <div class="rows">
+          <div class="row">
+            <div class="chk"></div>
+            <div class="body"><div class="t">Make moodboards</div><div class="c">Work</div></div>
+            <div class="chev"><svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg></div>
+          </div>
+          <div class="row row--done">
+            <div class="chk chk--done"><svg viewBox="0 0 12 12"><path d="M1.6 6.2 4.4 9 10.4 3"/></svg></div>
+            <div class="body"><div class="t">Send mum flowers</div><div class="c">Personal</div></div>
+            <div class="chev"><svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg></div>
+          </div>
+          <div class="row row--open">
+            <div class="chk"></div>
+            <div class="body"><div class="t">Redesign website</div><div class="c">Work</div></div>
+            <div class="chev"><svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg></div>
+          </div>
+          <div class="row-notes">
+            <div class="txt">Start with the case-study template. Ask Sam for the old analytics export before touching the nav.</div>
+            <div class="row-acts"><button class="mini">Edit</button><button class="mini mini--del">Delete</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ 05 · CONTROLS ════════════════ -->
+  <section>
+    <div class="sec-label"><span class="n">05</span> Filter bar &amp; add button<span class="rule"></span></div>
+    <p class="note">
+      Ref 1's pill segmented control, retasked from TASKS/PROJECTS to our three filters. Verified to
+      fit at 375px — the narrowest phone still in use.
+    </p>
+    <div class="grid2">
+      <div class="cell t-dark ticks">
+        <span class="cell-tag">Dark</span>
+        <div class="bar">
+          <div class="seg" role="tablist">
+            <button role="tab" aria-selected="true">All</button>
+            <button role="tab" aria-selected="false">Personal</button>
+            <button role="tab" aria-selected="false">Work</button>
+          </div>
+          <button class="fab"><svg viewBox="0 0 15 15"><path d="M7.5 1v13M1 7.5h13"/></svg></button>
+        </div>
+      </div>
+      <div class="cell t-light ticks">
+        <span class="cell-tag">Light</span>
+        <div class="bar">
+          <div class="seg" role="tablist">
+            <button role="tab" aria-selected="true">All</button>
+            <button role="tab" aria-selected="false">Personal</button>
+            <button role="tab" aria-selected="false">Work</button>
+          </div>
+          <button class="fab"><svg viewBox="0 0 15 15"><path d="M7.5 1v13M1 7.5h13"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ 06 · ADD SHEET ════════════════ -->
+  <section>
+    <div class="sec-label"><span class="n">06</span> Add task<span class="rule"></span></div>
+    <p class="note">
+      Slides up from the bottom on phone, centres as a dialog on desktop. Notes are optional and
+      collapsed out of the way — title plus a tap on Personal or Work is the whole required path.
+    </p>
+    <div class="grid2">
+      <div class="cell t-dark ticks" style="padding:0;border:0;">
+        <div class="sheet t-dark">
+          <div class="sheet-hd"><span class="ttl">New task</span><button class="mini">Close</button></div>
+          <div class="field">
+            <label>Task</label>
+            <input type="text" value="Book lunch with Sam">
+          </div>
+          <div class="field">
+            <label>Category</label>
+            <div class="chips">
+              <button class="chip" aria-pressed="true">Personal</button>
+              <button class="chip" aria-pressed="false">Work</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Notes — optional</label>
+            <textarea placeholder="Anything worth remembering…">Somewhere near the studio. Thursday or Friday works.</textarea>
+          </div>
+          <button class="btn">Add task</button>
+        </div>
+      </div>
+      <div class="cell t-light ticks" style="padding:0;border:0;">
+        <div class="sheet t-light">
+          <div class="sheet-hd"><span class="ttl">New task</span><button class="mini">Close</button></div>
+          <div class="field">
+            <label>Task</label>
+            <input type="text" value="Book lunch with Sam">
+          </div>
+          <div class="field">
+            <label>Category</label>
+            <div class="chips">
+              <button class="chip" aria-pressed="true">Personal</button>
+              <button class="chip" aria-pressed="false">Work</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Notes — optional</label>
+            <textarea placeholder="Anything worth remembering…">Somewhere near the studio. Thursday or Friday works.</textarea>
+          </div>
+          <button class="btn">Add task</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ 07 · PHONE PREVIEW ════════════════ -->
+  <section>
+    <div class="sec-label"><span class="n">07</span> Assembled — phone, both themes<span class="rule"></span></div>
+    <p class="note">
+      Ref 1's defining move kept intact: the list sits at the <b>bottom</b> of the screen, with the
+      day's empty space above it. I have filled that void with a faded dot-matrix field so it reads
+      as deliberate rather than unfinished — and it is the most Nothing gesture in the whole design.
+      Headline shown here in option A.
+    </p>
+    <div class="phones">
+      <div class="phone t-light">
+        <div class="notch"></div>
+        <div class="p-head">
+          <h2 class="p-greet">Good<br>Morning,<br>Josef</h2>
+          <svg class="globe" viewBox="0 0 40 40"><circle cx="20" cy="20" r="15"/><ellipse cx="20" cy="20" rx="6" ry="15"/><ellipse cx="20" cy="20" rx="12.5" ry="15"/><line x1="5" y1="20" x2="35" y2="20"/><line x1="7.6" y1="12" x2="32.4" y2="12"/><line x1="7.6" y1="28" x2="32.4" y2="28"/></svg>
+        </div>
+        <div class="p-rule"></div>
+        <div class="p-count"><span class="num">04</span> tasks for today</div>
+        <div class="p-spacer"></div>
+        <div class="rows" style="border-top:0;">
+          <div class="row"><div class="chk"></div><div class="body"><div class="t">Make moodboards</div><div class="c">Work</div></div><div class="chev"><svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg></div></div>
+          <div class="row"><div class="chk"></div><div class="body"><div class="t">Redesign website</div><div class="c">Work</div></div><div class="chev"><svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg></div></div>
+          <div class="row"><div class="chk"></div><div class="body"><div class="t">Send mum flowers</div><div class="c">Personal</div></div><div class="chev"><svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg></div></div>
+          <div class="row" style="border-bottom:0;"><div class="chk"></div><div class="body"><div class="t">Book lunch with Sam</div><div class="c">Personal</div></div><div class="chev"><svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg></div></div>
+        </div>
+        <div class="p-foot">
+          <div class="bar">
+            <div class="seg"><button aria-selected="true">All</button><button aria-selected="false">Personal</button><button aria-selected="false">Work</button></div>
+            <button class="fab"><svg viewBox="0 0 15 15"><path d="M7.5 1v13M1 7.5h13"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone t-dark">
+        <div class="notch"></div>
+        <div class="p-head">
+          <h2 class="p-greet">Good<br>Morning,<br>Josef</h2>
+          <svg class="globe" viewBox="0 0 40 40"><circle cx="20" cy="20" r="15"/><ellipse cx="20" cy="20" rx="6" ry="15"/><ellipse cx="20" cy="20" rx="12.5" ry="15"/><line x1="5" y1="20" x2="35" y2="20"/><line x1="7.6" y1="12" x2="32.4" y2="12"/><line x1="7.6" y1="28" x2="32.4" y2="28"/></svg>
+        </div>
+        <div class="p-rule"></div>
+        <div class="p-count"><span class="num">04</span> tasks for today</div>
+        <div class="p-spacer"></div>
+        <div class="rows" style="border-top:0;">
+          <div class="row"><div class="chk"></div><div class="body"><div class="t">Make moodboards</div><div class="c">Work</div></div><div class="chev"><svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg></div></div>
+          <div class="row"><div class="chk"></div><div class="body"><div class="t">Redesign website</div><div class="c">Work</div></div><div class="chev"><svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg></div></div>
+          <div class="row"><div class="chk"></div><div class="body"><div class="t">Send mum flowers</div><div class="c">Personal</div></div><div class="chev"><svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg></div></div>
+          <div class="row" style="border-bottom:0;"><div class="chk"></div><div class="body"><div class="t">Book lunch with Sam</div><div class="c">Personal</div></div><div class="chev"><svg viewBox="0 0 7 12"><path d="M1 1l5 5-5 5"/></svg></div></div>
+        </div>
+        <div class="p-foot">
+          <div class="bar">
+            <div class="seg"><button aria-selected="true">All</button><button aria-selected="false">Personal</button><button aria-selected="false">Work</button></div>
+            <button class="fab"><svg viewBox="0 0 15 15"><path d="M7.5 1v13M1 7.5h13"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
