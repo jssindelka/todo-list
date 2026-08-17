@@ -127,6 +127,11 @@ Source: Deploy from a branch**, branch `main`, folder `/ (root)`. Save.
 install to the home screen on iOS), then **Share → Add to Home Screen**. It gets
 the app icon, launches without browser chrome, and works offline.
 
+**6.** If you use sync: **iOS gives the home-screen app its own storage**, separate
+from Safari. The installed app therefore starts empty and has not joined your
+list, even though Safari had. Open it, go to ⋯ → **Join list**, paste your sync
+link, done. One paste, once — after that it stays joined.
+
 ### After you change anything
 
 Bump `CACHE` in `sw.js` (`todo-v1` → `todo-v2`, and so on) before you push.

@@ -408,11 +408,13 @@ button,.chk,.disc,.chip,.seg button{touch-action:manipulation;}
   margin:0 0 10px;font-size:10px;line-height:1.7;letter-spacing:.02em;
   color:var(--fg-dim);text-transform:none;
 }
-#syncLink{
+#syncLink,#joinLink{
   width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);
   padding:0 0 7px;outline:none;font-size:10px;letter-spacing:.02em;
   color:var(--fg-dim);text-transform:none;border-radius:0;
 }
+#joinPanel{margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft);}
+#joinLink::placeholder{color:var(--fg-faint);}
 
 /* ═══════════════════════════════════════════════════════════════════
    TOAST — undo affordance for destructive actions
@@ -571,6 +573,12 @@ button,.chk,.disc,.chip,.seg button{touch-action:manipulation;}
       <button class="menu-act" id="syncNow">Sync now</button>
       <button class="menu-act" id="syncCopy">Copy link</button>
     </div>
+    <div id="joinPanel">
+      <p class="sync-note">Added to your home screen? iOS gives that app its own storage, so paste your link here once to join.</p>
+      <input type="text" id="joinLink" placeholder="Paste sync link" spellcheck="false"
+             autocapitalize="off" autocorrect="off">
+      <button class="menu-act" id="joinBtn">Join list</button>
+    </div>
   </div>
 
   <div class="menu-grp">
@@ -699,6 +707,9 @@ function greeting(){
    nothing to migrate. Display only partitions it: open work above, done
    below, each group keeping its array order. */
 const live = () => state.tasks.filter(t => !t.deletedAt);
+// running as an installed app rather than a browser tab
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches
+  || navigator.standalone === true;
 
 function visible(){
   const f = state.prefs.filter;
@@ -772,11 +783,18 @@ function render(){
     /* An empty Today with a full backlog reads as "nothing synced" unless it
        says otherwise. Tell them where their tasks actually are. */
     const waiting = live().filter(t => !t.done).length;
-    p.textContent =
-      live().length === 0            ? 'Nothing here yet' :
-      state.prefs.filter !== 'today' ? 'Nothing in this filter' :
-      waiting === 0                  ? 'All done — nothing waiting' :
-      `${WORDS[waiting] || waiting} waiting in personal & work`;
+    /* A freshly installed home-screen app is empty and has never joined the
+       list, because iOS does not share storage with Safari. Say so on the
+       screen rather than leaving it to be discovered in a menu. */
+    if(live().length === 0 && !Sync.isOn() && isStandalone()){
+      p.textContent = 'Tap ⋯ to join your synced list';
+    }else{
+      p.textContent =
+        live().length === 0            ? 'Nothing here yet' :
+        state.prefs.filter !== 'today' ? 'Nothing in this filter' :
+        waiting === 0                  ? 'All done — nothing waiting' :
+        `${WORDS[waiting] || waiting} waiting in personal & work`;
+    }
     v.appendChild(p);
   }
 
@@ -1166,6 +1184,14 @@ $('#syncToggle').addEventListener('click', () => {
   else Sync.enable();
 });
 $('#syncNow').addEventListener('click', () => { closeMenu(); Sync.manual(); });
+$('#joinBtn').addEventListener('click', async () => {
+  const v = $('#joinLink').value.trim();
+  if(!v){ $('#joinLink').focus(); return; }
+  if(await Sync.join(v)){ $('#joinLink').value = ''; closeMenu(); }
+});
+$('#joinLink').addEventListener('keydown', e => {
+  if(e.key === 'Enter'){ e.preventDefault(); $('#joinBtn').click(); }
+});
 $('#syncCopy').addEventListener('click', async () => {
   const link = Sync.link();
   try{
@@ -1371,7 +1397,26 @@ const Sync = (() => {
       null);
   }
 
-  return { init, enable, disable, schedule, paintUI, link, isOn: on, run, manual };
+  /* Accepts the whole link or just the key. An installed iOS app cannot
+     see Safari's storage, so this is how it joins a list that already
+     exists rather than starting a second, empty one. */
+  async function join(raw){
+    const m = String(raw || '').match(/([A-Za-z0-9_-]{32,64})/);
+    if(!m){ showToast('That does not look like a sync link', null); return false; }
+    if(m[1] === state.sync.key && on()){ showToast('Already on this list', null); return true; }
+    state.sync.key = m[1];
+    state.sync.enabled = true;
+    save();
+    showToast('Joining…', null);
+    await run();
+    paintUI();
+    const n = state.tasks.filter(t => !t.deletedAt).length;
+    showToast(status === 'ok' ? `Joined — ${n} task${n === 1 ? '' : 's'}` : 'Could not reach sync', null);
+    render();
+    return true;
+  }
+
+  return { init, enable, disable, schedule, paintUI, link, isOn: on, run, manual, join };
 })();
 
 /* ═══════════════════════════════════════════════════════════════════
