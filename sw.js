@@ -1,7 +1,7 @@
 /* Service worker — the only reason this app works with no signal.
    Bump CACHE when you change index.html, or browsers will keep serving
    the old copy from cache.                                            */
-const CACHE = 'todo-v9';
+const CACHE = 'todo-v10';
 
 const ASSETS = [
   './',

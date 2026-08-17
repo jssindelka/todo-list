@@ -101,6 +101,14 @@ button,.chk,.disc,.chip,.seg button{touch-action:manipulation;}
   font-size:clamp(24px,7.4vw,32px);line-height:1.1;letter-spacing:.015em;
   text-transform:uppercase;margin:0;
 }
+/* Tapping the greeting forces a sync. It is the biggest thing on screen and
+   costs no extra chrome, which suits a design with this little of it. */
+.greet-btn{
+  font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;
+  line-height:inherit;text-align:left;padding:0;background:none;border:0;
+  white-space:pre-line;cursor:pointer;transition:opacity .2s;
+}
+.greet-btn:active{opacity:.55;}
 .hd-btn{
   width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;
   border-radius:50%;color:var(--fg);transition:opacity .2s;
@@ -466,7 +474,7 @@ button,.chk,.disc,.chip,.seg button{touch-action:manipulation;}
 
 <main id="app">
   <header class="hd">
-    <h1 class="greet" id="greet">Good Morning</h1>
+    <h1 class="greet"><button type="button" class="greet-btn" id="greetBtn">Good Morning</button></h1>
     <div class="hd-actions">
       <button class="hd-btn" id="themeBtn" aria-label="Switch theme">
         <svg class="globe" viewBox="0 0 40 40" aria-hidden="true">
@@ -560,6 +568,7 @@ button,.chk,.disc,.chip,.seg button{touch-action:manipulation;}
     <div id="syncPanel" hidden>
       <p class="sync-note">Open this link on your other device to share this list. Treat it like a password.</p>
       <input type="text" id="syncLink" readonly spellcheck="false">
+      <button class="menu-act" id="syncNow">Sync now</button>
       <button class="menu-act" id="syncCopy">Copy link</button>
     </div>
   </div>
@@ -727,8 +736,10 @@ function toggleToday(id){
 
 function render(){
   // header
-  $('#greet').textContent = greeting();
-  $('#greet').style.whiteSpace = 'pre-line';
+  $('#greetBtn').textContent = greeting();
+  $('#greetBtn').setAttribute('aria-label',
+    Sync.isOn() ? greeting().replace('\n',', ') + ' — tap to sync now'
+                : greeting().replace('\n',', '));
 
   // count line — ref 1's exact phrasing, with the number spelled out
   const open = visible().filter(t => !t.done).length;
@@ -758,9 +769,14 @@ function render(){
   if(items.length === 0){
     const p = document.createElement('p');
     p.className = 'empty';
-    p.textContent = live().length === 0 ? 'Nothing here yet'
-      : state.prefs.filter === 'today' ? 'Swipe a task in to start the day'
-      : 'Nothing in this filter';
+    /* An empty Today with a full backlog reads as "nothing synced" unless it
+       says otherwise. Tell them where their tasks actually are. */
+    const waiting = live().filter(t => !t.done).length;
+    p.textContent =
+      live().length === 0            ? 'Nothing here yet' :
+      state.prefs.filter !== 'today' ? 'Nothing in this filter' :
+      waiting === 0                  ? 'All done — nothing waiting' :
+      `${WORDS[waiting] || waiting} waiting in personal & work`;
     v.appendChild(p);
   }
 
@@ -1057,6 +1073,7 @@ function closeMenu(){
 $('#menuBtn').addEventListener('click', () =>
   $('#menu').dataset.open === 'true' ? closeMenu() : openMenu());
 $('#themeBtn').addEventListener('click', toggleTheme);
+$('#greetBtn').addEventListener('click', () => Sync.manual());
 
 $$('.menu button[data-theme]').forEach(b => b.addEventListener('click', () => {
   state.prefs.theme = b.dataset.theme;
@@ -1066,7 +1083,7 @@ $$('.menu button[data-theme]').forEach(b => b.addEventListener('click', () => {
 $('#fName').addEventListener('input', e => {
   state.prefs.name = e.target.value.replace(/\s+/g,' ').slice(0,24);
   state.sync.nameUpdatedAt = Date.now();
-  save(); $('#greet').textContent = greeting();
+  save(); $('#greetBtn').textContent = greeting();
   Sync.schedule();
 });
 
@@ -1148,6 +1165,7 @@ $('#syncToggle').addEventListener('click', () => {
   if(Sync.isOn()){ Sync.disable(); showToast('Sync off', null); }
   else Sync.enable();
 });
+$('#syncNow').addEventListener('click', () => { closeMenu(); Sync.manual(); });
 $('#syncCopy').addEventListener('click', async () => {
   const link = Sync.link();
   try{
@@ -1333,7 +1351,27 @@ const Sync = (() => {
     document.addEventListener('visibilitychange', () => { if(!document.hidden && on()) run(); });
   }
 
-  return { init, enable, disable, schedule, paintUI, link, isOn: on, run };
+  /* Tapping the greeting lands here. It reports what actually happened,
+     including the two cases that look identical from the outside: sync is
+     off, or sync is on but the other device never joined this list. */
+  async function manual(){
+    if(!state.sync.key || !state.sync.enabled){
+      showToast('Sync is off — turn it on in the menu', null);
+      return;
+    }
+    const count = () => state.tasks.filter(t => !t.deletedAt).length;
+    const was = count();
+    showToast('Syncing…', null);
+    await run();
+    const gained = count() - was;
+    showToast(
+      status !== 'ok'   ? 'Could not reach sync' :
+      gained > 0        ? `${gained} new task${gained === 1 ? '' : 's'}` :
+      gained < 0        ? 'Updated' : 'Already up to date',
+      null);
+  }
+
+  return { init, enable, disable, schedule, paintUI, link, isOn: on, run, manual };
 })();
 
 /* ═══════════════════════════════════════════════════════════════════

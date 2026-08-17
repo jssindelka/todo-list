@@ -20,6 +20,7 @@ fonts included — and works with no network at all.
 | **Reorder, desktop** | **press and drag a task** |
 | **Reorder, phone** | **hold a task briefly, then drag** |
 | **Reorder, keyboard** | **focus a task, `Alt + ↑` / `Alt + ↓`** |
+| **Sync now** | **tap the greeting** (or ⋯ → Sync now) |
 | **Send to Today, phone** | **swipe the task right, tap the sun** |
 | **Send to Today, desktop** | **hover the row, click the sun** |
 | **Send to Today, keyboard** | **focus a task, press `T`** |
@@ -43,6 +44,11 @@ Deleting a task and clearing completed both offer **Undo** for a few seconds.
 Personal and Work are the backlog; **Today** is what you have committed to. A
 task sent to Today still lives in its own category — it appears in both, marked
 `work · today` in the backlog so you can see what is already allocated.
+
+New tasks are **never** put into Today automatically — that is the point. They
+land in Personal or Work, and you pick each morning. An empty Today with a full
+backlog therefore says how many tasks are waiting, so it does not read as
+"nothing synced".
 
 Unfinished work **carries over** on its own. A task leaves Today only once the
 day you finished it has passed, so completing something at 11pm still reads as
