@@ -122,8 +122,11 @@ the app icon, launches without browser chrome, and works offline.
 ### After you change anything
 
 Bump `CACHE` in `sw.js` (`todo-v1` → `todo-v2`, and so on) before you push.
-Otherwise the service worker keeps serving the old copy from cache and your
-change won't appear. This is the single most likely thing to confuse you later.
+
+The document itself is fetched network-first, so a deploy shows up on the next
+open rather than the one after, and the page reloads itself once when a new
+worker takes over. Offline still works — the document falls back to cache when
+there is no network.
 
 ---
 

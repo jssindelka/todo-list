@@ -1,7 +1,7 @@
 /* Service worker — the only reason this app works with no signal.
    Bump CACHE when you change index.html, or browsers will keep serving
    the old copy from cache.                                            */
-const CACHE = 'todo-v7';
+const CACHE = 'todo-v8';
 
 const ASSETS = [
   './',
@@ -34,8 +34,27 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
 
-  // Stale-while-revalidate: the app opens instantly from cache, and the
-  // newer copy is fetched in the background for the next launch.
+  // The document decides which version of the app you are running, so it is
+  // always fetched fresh when there is a network, falling back to cache when
+  // there isn't. Serving it stale-first is what made every deploy take two
+  // opens to appear.
+  if (req.mode === 'navigate' || req.destination === 'document') {
+    e.respondWith(
+      fetch(req)
+        .then(res => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then(c => c.put('index.html', copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match('index.html').then(r => r || caches.match('./')))
+    );
+    return;
+  }
+
+  // Everything else is content-stable, so serve it instantly from cache and
+  // refresh in the background.
   e.respondWith(
     caches.match(req, { ignoreSearch: true }).then(cached => {
       const fresh = fetch(req)
@@ -46,7 +65,7 @@ self.addEventListener('fetch', e => {
           }
           return res;
         })
-        .catch(() => cached || caches.match('index.html'));
+        .catch(() => cached);
 
       return cached || fresh;
     })

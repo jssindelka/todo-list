@@ -410,14 +410,17 @@ button,.chk,.disc,.chip,.seg button{touch-action:manipulation;}
    TOAST — undo affordance for destructive actions
    ═══════════════════════════════════════════════════════════════════ */
 .toast{
-  position:fixed;z-index:12;left:50%;bottom:calc(env(safe-area-inset-bottom) + 88px);
+  position:fixed;z-index:12;left:50%;bottom:calc(env(safe-area-inset-bottom) + 100px);
   transform:translate(-50%,14px);opacity:0;pointer-events:none;
   display:flex;align-items:center;gap:18px;
   background:var(--fg);color:var(--knock);padding:12px 18px;border-radius:999px;
   font-size:10px;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;
   transition:opacity .22s var(--ease),transform .22s var(--ease);
 }
-.toast[data-open="true"]{opacity:1;transform:translate(-50%,0);pointer-events:auto;}
+/* Only the Undo button is interactive. The bar itself never takes
+   pointer events, so even if it overlaps a control it cannot block it. */
+.toast[data-open="true"]{opacity:1;transform:translate(-50%,0);}
+.toast[data-open="true"] button{pointer-events:auto;}
 .toast button{color:inherit;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
   font-weight:700;text-decoration:underline;text-underline-offset:3px;}
 
@@ -451,7 +454,7 @@ button,.chk,.disc,.chip,.seg button{touch-action:manipulation;}
   /* keep the menu tucked under the globe: the column is centred and
      capped at 600px, so its right edge sits 50vw - 300px from the wall */
   .menu{top:96px;right:max(var(--pad), calc(50vw - 300px + 32px));}
-  .toast{bottom:40px;}
+  .toast{bottom:118px;}   /* clear the 61px tab bar + its 40px gutter */
 }
 
 @media (prefers-reduced-motion:reduce){
@@ -1640,6 +1643,17 @@ document.addEventListener('visibilitychange', () => {
 setInterval(() => { if(rolloverToday()){ render(); Sync.schedule(); } }, 5 * 60 * 1000);
 
 if('serviceWorker' in navigator){
+  /* Without this, a deploy needs two opens: the cached copy renders, the new
+     worker installs behind it, and you keep looking at the old app. Reload
+     once when a new worker takes over — but not on first install, when there
+     was no previous controller and nothing is stale. */
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if(!hadController || reloading) return;
+    reloading = true;
+    location.reload();
+  });
   window.addEventListener('load', () =>
     navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW failed', err)));
 }
