@@ -17,9 +17,20 @@ fonts included — and works with no network at all.
 | Save | `Enter` in the title field, `⌘/Ctrl + Enter` in notes |
 | Complete | tap the circle |
 | Notes, edit, delete | tap the task to expand it |
+| **Reorder, desktop** | **press and drag a task** |
+| **Reorder, phone** | **hold a task briefly, then drag** |
+| **Reorder, keyboard** | **focus a task, `Alt + ↑` / `Alt + ↓`** |
 | Filter | All / Personal / Work |
 | Theme, name, backup | the globe, top right |
 | Close anything | `Esc` |
+
+Reordering uses Pointer Events rather than HTML5 drag-and-drop, which does not
+exist on iOS Safari. On phone the long-press is deliberate: without it, every
+attempt to scroll the list would pick a task up instead. Completed tasks stay
+below open ones — you can reorder within each group, but not across them.
+
+The array order of `state.tasks` *is* the order. Dragging splices that array, so
+there is no separate index to keep in sync and nothing to migrate.
 
 Deleting a task and clearing completed both offer **Undo** for a few seconds.
 
